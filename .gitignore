@@ -1,0 +1,15 @@
+target/
+.idea/
+
+# Sesión de Chrome (cookies de Google y MakerOnline): NUNCA subir
+chrome-profile/
+
+# Modelos del usuario y resultados
+modelos/
+subidas/pendientes/*
+subidas/subidos/*
+subidas/errores/*
+!subidas/**/.gitkeep
+**/resultado.png
+**/error.png
+**/error.txt
