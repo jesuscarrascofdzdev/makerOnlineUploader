@@ -4,6 +4,7 @@ import com.microsoft.playwright.*;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -24,15 +25,33 @@ public final class Browsers {
 
     private Browsers() {}
 
+    /** Chrome con ventana normal (Uploader, SaveSession, Codegen). */
     public static BrowserContext openChrome(Playwright pw, double slowMoMs) {
-        return pw.chromium().launchPersistentContext(PROFILE_DIR,
-                new BrowserType.LaunchPersistentContextOptions()
-                        .setChannel("chrome")          // usa Google Chrome instalado
-                        .setHeadless(false)
-                        .setSlowMo(slowMoMs)
-                        // Quita la marca de "navegador controlado por software"
-                        // que Google usa para bloquear el login.
-                        .setIgnoreDefaultArgs(List.of("--enable-automation"))
-                        .setArgs(List.of("--disable-blink-features=AutomationControlled")));
+        return openChrome(pw, slowMoMs, false, false);
+    }
+
+    /**
+     * @param headless        true = sin ventana (Chrome headless).
+     * @param fueraDePantalla true = ventana normal pero colocada fuera de la pantalla:
+     *                        funciona igual que una visible y no ocupa sitio (lo usa el
+     *                        Downloader, que la trae a la vista si hace falta un captcha).
+     */
+    public static BrowserContext openChrome(Playwright pw, double slowMoMs, boolean headless, boolean fueraDePantalla) {
+        List<String> args = new ArrayList<>(List.of("--disable-blink-features=AutomationControlled"));
+        if (fueraDePantalla && !headless) args.add("--window-position=-10000,-10000");
+
+        BrowserType.LaunchPersistentContextOptions opts = new BrowserType.LaunchPersistentContextOptions()
+                .setChannel("chrome")          // usa Google Chrome instalado
+                .setHeadless(headless)
+                .setAcceptDownloads(true)
+                .setSlowMo(slowMoMs)
+                // Quita la marca de "navegador controlado por software"
+                // que Google usa para bloquear el login.
+                .setIgnoreDefaultArgs(List.of("--enable-automation"))
+                .setArgs(args);
+        if (headless || fueraDePantalla) {
+            opts.setViewportSize(1366, 900); // tamaño de escritorio para que la web use su diseño normal
+        }
+        return pw.chromium().launchPersistentContext(PROFILE_DIR, opts);
     }
 }

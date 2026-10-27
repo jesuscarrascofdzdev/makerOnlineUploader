@@ -13,3 +13,12 @@ subidas/errores/*
 **/resultado.png
 **/error.png
 **/error.txt
+
+# Downloader: lo descargado (solo se sube la carpeta vacía), tu lista de usuarios y el registro
+modelos-descargados/*
+!modelos-descargados/.gitkeep
+usuarios.json
+descargados.txt
+
+# Candado que impide lanzar dos programas del agente a la vez
+.agente.lock

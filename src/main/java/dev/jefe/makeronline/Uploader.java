@@ -26,6 +26,8 @@ import java.util.stream.Stream;
  * Argumentos (opcionales):
  *   --revisar   se para justo antes de guardar el borrador para que mires el
  *               formulario. Pulsa "Resume" en el Inspector para continuar.
+ *   --esperar   si el Downloader (u otro programa del agente) está en marcha,
+ *               espera a que termine en vez de salir.
  *   nombre ...  solo procesa esas carpetas de pendientes/ (sin nombres, todas).
  *               Ejemplo: --revisar llavero-gato
  */
@@ -41,6 +43,13 @@ public class Uploader {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmm");
 
     public static void main(String[] args) throws Exception {
+        // Solo un programa del agente a la vez: comparten chrome-profile/
+        try (AgentLock lock = AgentLock.acquire("Uploader", List.of(args).contains("--esperar"))) {
+            ejecutar(args);
+        }
+    }
+
+    private static void ejecutar(String[] args) throws Exception {
         boolean revisar = List.of(args).contains("--revisar");
 
         Files.createDirectories(PENDIENTES);
@@ -114,6 +123,19 @@ public class Uploader {
         System.out.printf("%nTerminado: %d subidos, %d con error.%n", ok, ko);
     }
 
+    /** Cierra el aviso de cookies si aparece: tapa la ventana de licencia y bloquea los clics. */
+    private static void cerrarCookies(Page page) {
+        Locator boton = page.getByRole(AriaRole.BUTTON,
+                new Page.GetByRoleOptions().setName("Necessary Only"));
+        try {
+            boton.waitFor(new Locator.WaitForOptions().setTimeout(3_000));
+            boton.click();
+            paso("Aviso de cookies cerrado");
+        } catch (TimeoutError e) {
+            // no hay aviso de cookies
+        }
+    }
+
     /** Rellena el formulario completo y guarda como borrador. */
     private static void subir(Page page, ModelFolder m, boolean revisar) {
         ModelMeta meta = m.meta();
@@ -130,6 +152,7 @@ public class Uploader {
             throw new IllegalStateException(
                     "No se ha cargado el formulario de subida. ¿Ha caducado la sesión? Ejecuta SaveSession.");
         }
+        cerrarCookies(page);
         paso("Licencia: " + meta.licenseOrDefault());
         licencia.click();
         page.getByText(meta.licenseOrDefault()).first().click();
@@ -152,8 +175,22 @@ public class Uploader {
 
         // --- Categoría (2 niveles) ---
         paso("Categoría: " + String.join(" > ", meta.category()));
-        page.getByRole(AriaRole.TEXTBOX,
-                new Page.GetByRoleOptions().setName("First level classification/")).click();
+        Locator selectorTipo = page.getByRole(AriaRole.TEXTBOX,
+                new Page.GetByRoleOptions().setName("First level classification/"));
+        Locator primerNivel = page.getByText(meta.category().get(0),
+                new Page.GetByTextOptions().setExact(true));
+        // el desplegable a veces no abre con el primer clic: se reintenta
+        for (int intento = 1; ; intento++) {
+            selectorTipo.scrollIntoViewIfNeeded();
+            selectorTipo.click();
+            try {
+                primerNivel.waitFor(new Locator.WaitForOptions().setTimeout(5_000));
+                break;
+            } catch (TimeoutError e) {
+                if (intento >= 3) throw e;
+                page.waitForTimeout(1000);
+            }
+        }
         for (String nivel : meta.category()) {
             page.getByText(nivel, new Page.GetByTextOptions().setExact(true)).click();
         }
@@ -185,6 +222,15 @@ public class Uploader {
         // --- Paso 2: archivos ---
         paso("Siguiente paso: archivos");
         page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Next Step, Add Files")).click();
+        try {
+            page.locator(".el-upload").filter(new Locator.FilterOptions().setHasText("Supported files: stl"))
+                    .first().waitFor(new Locator.WaitForOptions().setTimeout(15_000));
+        } catch (TimeoutError e) {
+            String avisos = String.join(" | ",
+                    page.locator(".el-message, .el-form-item__error, .el-message-box").allInnerTexts());
+            throw new IllegalStateException("No avanza al paso de archivos. Avisos del formulario: "
+                    + (avisos.isBlank() ? "(ninguno)" : avisos));
+        }
 
         if (m.is3mf()) {
             paso("Perfil de impresión (3mf): " + m.model().getFileName());

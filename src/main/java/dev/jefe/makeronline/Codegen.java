@@ -8,8 +8,9 @@ import com.microsoft.playwright.*;
  * Copia el código del Inspector ANTES de pulsar Resume.
  */
 public class Codegen {
-    public static void main(String[] args) {
-        try (Playwright pw = Playwright.create();
+    public static void main(String[] args) throws Exception {
+        try (AgentLock lock = AgentLock.acquire("Codegen", false);
+             Playwright pw = Playwright.create();
              BrowserContext ctx = Browsers.openChrome(pw, 0)) {
             Page page = ctx.pages().isEmpty() ? ctx.newPage() : ctx.pages().get(0);
             page.navigate("https://www.makeronline.com/en/upload");

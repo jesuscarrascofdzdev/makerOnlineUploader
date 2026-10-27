@@ -12,8 +12,9 @@ import java.util.Scanner;
  * la sesión queda guardada en el perfil para el agente.
  */
 public class SaveSession {
-    public static void main(String[] args) {
-        try (Playwright pw = Playwright.create();
+    public static void main(String[] args) throws Exception {
+        try (AgentLock lock = AgentLock.acquire("SaveSession", false);
+             Playwright pw = Playwright.create();
              BrowserContext ctx = Browsers.openChrome(pw, 0)) {
             Page page = ctx.pages().isEmpty() ? ctx.newPage() : ctx.pages().get(0);
             page.navigate("https://www.makeronline.com/en/");
